@@ -36,6 +36,7 @@
     "dependencies": {
         "@augment-vir/browser": "^29.1.10",
         "@augment-vir/common": "^29.1.10",
-        "run-time-assertions": "^1.5.1"
+        "run-time-assertions": "^1.5.1",
+        "typed-event-target": "^3.4.0"
     }
 }

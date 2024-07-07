@@ -1,7 +1,25 @@
 import {createDeferredPromiseWrapper} from '@augment-vir/common';
 import {assertDefined, isRunTimeType} from 'run-time-assertions';
+import {defineTypedCustomEvent, ListenTarget} from 'typed-event-target';
 
-export class PeerConnectionController {
+export class PeerMessageReceivedEvent extends defineTypedCustomEvent<string>()(
+    'peer-message-received',
+) {}
+
+export enum PeerConnectionStatus {
+    Connecting = 'connecting',
+    Connected = 'connected',
+    Closing = 'closing',
+    Closed = 'closed',
+}
+
+export class PeerConnectionStatusEvent extends defineTypedCustomEvent<PeerConnectionStatus>()(
+    'peer-connection-status',
+) {}
+
+export class PeerConnectionController extends ListenTarget<
+    PeerMessageReceivedEvent | PeerConnectionStatusEvent
+> {
     private offer: undefined | Readonly<RTCSessionDescriptionInit>;
     private answer: undefined | Readonly<RTCSessionDescriptionInit>;
     private dataChannel: undefined | Readonly<RTCDataChannel>;
@@ -24,17 +42,7 @@ export class PeerConnectionController {
 
         this.connection = new RTCPeerConnection();
         this.connection.addEventListener('icecandidate', iceCandidateListener);
-        // this.connection.addEventListener('connectionstatechange', (event) => {
-        //     console.log(event);
-        // });
-        this.dataChannel = this.connection.createDataChannel('chat');
-
-        this.dataChannel.addEventListener('open', () => {
-            console.log('connected');
-        });
-        this.dataChannel.addEventListener('message', (event) => {
-            console.log('message', event.data);
-        });
+        this.handleDataChannel(this.connection.createDataChannel('chat'));
         await this.connection.setLocalDescription(await this.connection.createOffer());
 
         await deferredIceCandidatePromise.promise;
@@ -63,17 +71,8 @@ export class PeerConnectionController {
             : rawOffer;
 
         this.connection = new RTCPeerConnection();
-        // peerConnection.addEventListener('connectionstatechange', (event) => {
-        //     console.log(event);
-        // });
         this.connection.addEventListener('datachannel', (event) => {
-            this.dataChannel = event.channel;
-            this.dataChannel.addEventListener('open', () => {
-                console.log('connected');
-            });
-            this.dataChannel.addEventListener('message', (event) => {
-                console.log('message', event.data);
-            });
+            this.handleDataChannel(event.channel);
         });
 
         await this.connection.setRemoteDescription(offer);
@@ -88,5 +87,22 @@ export class PeerConnectionController {
     public sendMessage(message: string) {
         assertDefined(this.dataChannel);
         this.dataChannel.send(message);
+    }
+
+    private handleDataChannel(dataChannel: Readonly<RTCDataChannel>) {
+        this.dataChannel = dataChannel;
+        this.dispatch(new PeerConnectionStatusEvent({detail: PeerConnectionStatus.Connecting}));
+        this.dataChannel.addEventListener('open', () => {
+            this.dispatch(new PeerConnectionStatusEvent({detail: PeerConnectionStatus.Connected}));
+        });
+        this.dataChannel.addEventListener('closing', () => {
+            this.dispatch(new PeerConnectionStatusEvent({detail: PeerConnectionStatus.Closing}));
+        });
+        this.dataChannel.addEventListener('close', () => {
+            this.dispatch(new PeerConnectionStatusEvent({detail: PeerConnectionStatus.Closed}));
+        });
+        this.dataChannel.addEventListener('message', (event) => {
+            this.dispatch(new PeerMessageReceivedEvent({detail: event.data}));
+        });
     }
 }
