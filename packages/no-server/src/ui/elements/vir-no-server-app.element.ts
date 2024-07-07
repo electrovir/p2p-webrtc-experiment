@@ -1,8 +1,17 @@
 import {extractEventTarget} from '@augment-vir/browser';
-import {css, defineElementNoInputs, html, listen, nothing, renderIf} from 'element-vir';
+import {
+    css,
+    defineElementNoInputs,
+    html,
+    listen,
+    nothing,
+    perInstance,
+    renderIf,
+} from 'element-vir';
 import {ViraButton, ViraButtonStyleEnum} from 'vira';
-import {acceptWebRtcOffer} from '../../webrtc/accept-offer';
-import {acceptAnswer, createWebRtcOffer} from '../../webrtc/create-offer';
+// import {acceptWebRtcOffer} from '../../webrtc/accept-offer';
+// import {acceptAnswer, createWebRtcOffer} from '../../webrtc/create-offer';
+import {PeerConnectionController} from '../../webrtc/peer-connection-controller';
 
 enum ConnectionMode {
     /** Host a connection. */
@@ -41,8 +50,8 @@ export const VirNoServerApp = defineElementNoInputs({
         }
     `,
     stateInitStatic: {
+        connectionController: perInstance(() => new PeerConnectionController()),
         connectionMode: undefined as undefined | ConnectionMode,
-        connection: undefined as undefined | Readonly<RTCPeerConnection>,
         offer: undefined as undefined | Readonly<RTCSessionDescriptionInit>,
         answer: undefined as undefined | Readonly<RTCSessionDescriptionInit>,
     },
@@ -55,17 +64,8 @@ export const VirNoServerApp = defineElementNoInputs({
                 Paste the client's offer:
                 <textarea
                     ${listen('input', async (event) => {
-                        if (!state.connection) {
-                            throw new Error(`Missing connection.`);
-                        }
-
                         const textAreaElement = extractEventTarget(event, HTMLTextAreaElement);
-                        const answer = JSON.parse(textAreaElement.value);
-
-                        console.log('handling input', answer);
-                        updateState({answer});
-                        await acceptAnswer(state.connection, answer);
-                        console.log('connected?');
+                        await state.connectionController.acceptAnswer(textAreaElement.value);
                     })}
                 ></textarea>
             </section>
@@ -78,10 +78,9 @@ export const VirNoServerApp = defineElementNoInputs({
                 <textarea
                     ${listen('input', async (event) => {
                         const textAreaElement = extractEventTarget(event, HTMLTextAreaElement);
-                        const offer = JSON.parse(textAreaElement.value);
-
-                        updateState({offer});
-                        const answer = await acceptWebRtcOffer(offer);
+                        const answer = await state.connectionController.createAnswer(
+                            textAreaElement.value,
+                        );
                         updateState({answer});
                     })}
                 ></textarea>
@@ -111,8 +110,8 @@ export const VirNoServerApp = defineElementNoInputs({
                         });
 
                         if (!state.offer) {
-                            const {offer, peerConnection} = await createWebRtcOffer();
-                            updateState({offer, connection: peerConnection});
+                            const offer = await state.connectionController.createOffer();
+                            updateState({offer});
                         }
                     })}
                 ></${ViraButton}>
