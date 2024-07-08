@@ -6,6 +6,8 @@ export class PeerMessageReceivedEvent extends defineTypedCustomEvent<string>()(
     'peer-message-received',
 ) {}
 
+export class PeerMessageSentEvent extends defineTypedCustomEvent<string>()('peer-message-sent') {}
+
 export enum PeerConnectionStatus {
     Connecting = 'connecting',
     Connected = 'connected',
@@ -17,16 +19,19 @@ export class PeerConnectionStatusEvent extends defineTypedCustomEvent<PeerConnec
     'peer-connection-status',
 ) {}
 
-export class PeerConnectionController extends ListenTarget<
-    PeerMessageReceivedEvent | PeerConnectionStatusEvent
-> {
+export type PeerConnectionEvents =
+    | PeerMessageSentEvent
+    | PeerMessageReceivedEvent
+    | PeerConnectionStatusEvent;
+
+export class PeerConnectionController extends ListenTarget<PeerConnectionEvents> {
     private offer: undefined | Readonly<RTCSessionDescriptionInit>;
     private answer: undefined | Readonly<RTCSessionDescriptionInit>;
     private dataChannel: undefined | Readonly<RTCDataChannel>;
     private connection: undefined | Readonly<RTCPeerConnection>;
 
     public async createOffer(): Promise<RTCSessionDescriptionInit> {
-        if (this.offer || this.dataChannel) {
+        if (this.offer || this.dataChannel || this.connection) {
             throw new Error('offer already created');
         }
 
@@ -45,6 +50,10 @@ export class PeerConnectionController extends ListenTarget<
         this.handleDataChannel(this.connection.createDataChannel('chat'));
         await this.connection.setLocalDescription(await this.connection.createOffer());
 
+        /**
+         * We must wait for the ice candidate promise to finish because it mutates
+         * `localDescription`. Without that mutation, the connection will not work.
+         */
         await deferredIceCandidatePromise.promise;
 
         const offer = this.connection.localDescription;
@@ -87,9 +96,13 @@ export class PeerConnectionController extends ListenTarget<
     public sendMessage(message: string) {
         assertDefined(this.dataChannel);
         this.dataChannel.send(message);
+        this.dispatch(new PeerMessageSentEvent({detail: message}));
     }
 
     private handleDataChannel(dataChannel: Readonly<RTCDataChannel>) {
+        if (this.dataChannel) {
+            throw new Error('data channel already created');
+        }
         this.dataChannel = dataChannel;
         this.dispatch(new PeerConnectionStatusEvent({detail: PeerConnectionStatus.Connecting}));
         this.dataChannel.addEventListener('open', () => {

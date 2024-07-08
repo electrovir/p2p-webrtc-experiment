@@ -8,7 +8,7 @@ import {
     perInstance,
     renderIf,
 } from 'element-vir';
-import {ViraButton, ViraButtonStyleEnum, ViraInput} from 'vira';
+import {noNativeSpacing, ViraButton, ViraButtonStyleEnum, ViraInput} from 'vira';
 // import {acceptWebRtcOffer} from '../../webrtc/accept-offer';
 // import {acceptAnswer, createWebRtcOffer} from '../../webrtc/create-offer';
 import {
@@ -17,6 +17,8 @@ import {
     PeerConnectionStatusEvent,
     PeerMessageReceivedEvent,
 } from '../../webrtc/peer-connection-controller';
+import {VirChat} from './vir-chat.element';
+import {VirHow} from './vir-how.element';
 
 enum ConnectionMode {
     /** Host a connection. */
@@ -30,9 +32,9 @@ export const VirNoServerApp = defineElementNoInputs({
     styles: css`
         :host {
             font-family: sans-serif;
-            padding: 64px;
+            padding: 16px;
             display: flex;
-            flex-direction: column;
+            flex-wrap: wrap;
             gap: 32px;
         }
 
@@ -42,10 +44,30 @@ export const VirNoServerApp = defineElementNoInputs({
             font-size: 2em;
         }
 
+        main {
+            flex-grow: 1;
+            max-width: 100%;
+            flex-basis: 500px;
+        }
+
+        .offer-wrapper {
+            padding: 16px 0;
+            width: 700px;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
         .offer {
             font-family: monospace;
             user-select: all;
             -webkit-user-select: all;
+            word-break: break-all;
+        }
+
+        p {
+            ${noNativeSpacing};
         }
 
         textarea {
@@ -61,6 +83,8 @@ export const VirNoServerApp = defineElementNoInputs({
         answer: undefined as undefined | Readonly<RTCSessionDescriptionInit>,
         connectionStatus: undefined as undefined | PeerConnectionStatus,
         messageToSend: '',
+        copied: false,
+        copiedTimeout: undefined as undefined | number,
     },
     initCallback({state, updateState}) {
         state.connectionController.listen(PeerMessageReceivedEvent, (event) => {
@@ -75,11 +99,34 @@ export const VirNoServerApp = defineElementNoInputs({
     },
     renderCallback({state, updateState}) {
         const hostTemplate = html`
-            <section class="host-offer">
-                Copy the following "offer" and send it to a client who will join you:
-                <p class="offer">${JSON.stringify(state.offer)}</p>
-                <br />
-                Paste the client's offer:
+            <section class="offer-wrapper host">
+                Copy the following "offer" and send it to a client so they can join you:
+                <div>
+                    <p class="offer">${JSON.stringify(state.offer)}</p>
+                    <button
+                        ${listen('click', async () => {
+                            await window.navigator.clipboard.writeText(JSON.stringify(state.offer));
+                            updateState({copied: true});
+                            if (state.copiedTimeout) {
+                                window.clearTimeout(state.copiedTimeout);
+                            }
+                            updateState({
+                                copiedTimeout: window.setTimeout(() => {
+                                    updateState({
+                                        copied: false,
+                                        copiedTimeout: undefined,
+                                    });
+                                }, 2000),
+                            });
+                        })}
+                    >
+                        ${state.copied ? 'copied' : 'copy'}
+                    </button>
+                </div>
+                <p>
+                    After pasting your offer, the client should provide you with an "answer". Paste
+                    the client's answer below:
+                </p>
                 <textarea
                     ${listen('input', async (event) => {
                         const textAreaElement = extractEventTarget(event, HTMLTextAreaElement);
@@ -90,7 +137,7 @@ export const VirNoServerApp = defineElementNoInputs({
         `;
 
         const joinTemplate = html`
-            <section class="join-offer">
+            <section class="offer-wrapper join">
                 Paste the host's offer:
                 <br />
                 <textarea
@@ -107,7 +154,30 @@ export const VirNoServerApp = defineElementNoInputs({
                     html`
                         <br />
                         Copy the following "answer" and send it to the host:
-                        <p class="offer">${JSON.stringify(state.answer)}</p>
+                        <div>
+                            <p class="offer">${JSON.stringify(state.answer)}</p>
+                            <button
+                                ${listen('click', async () => {
+                                    await window.navigator.clipboard.writeText(
+                                        JSON.stringify(state.answer),
+                                    );
+                                    updateState({copied: true});
+                                    if (state.copiedTimeout) {
+                                        window.clearTimeout(state.copiedTimeout);
+                                    }
+                                    updateState({
+                                        copiedTimeout: window.setTimeout(() => {
+                                            updateState({
+                                                copied: false,
+                                                copiedTimeout: undefined,
+                                            });
+                                        }, 2000),
+                                    });
+                                })}
+                            >
+                                ${state.copied ? 'copied' : 'copy'}
+                            </button>
+                        </div>
                     `,
                 )}
             </section>
@@ -132,45 +202,50 @@ export const VirNoServerApp = defineElementNoInputs({
         `;
 
         return html`
-            <section class="buttons">
-                <${ViraButton.assign({
-                    text: 'Host',
-                    buttonStyle:
-                        state.connectionMode === ConnectionMode.Host
-                            ? ViraButtonStyleEnum.Default
-                            : ViraButtonStyleEnum.Outline,
-                })}
-                    ${listen('click', async () => {
-                        updateState({
-                            connectionMode: ConnectionMode.Host,
-                        });
+            <main>
+                <${VirHow}></${VirHow}>
+                <section class="buttons">
+                    <${ViraButton.assign({
+                        text: 'Host',
+                        buttonStyle:
+                            state.connectionMode === ConnectionMode.Host
+                                ? ViraButtonStyleEnum.Default
+                                : ViraButtonStyleEnum.Outline,
+                    })}
+                        ${listen('click', async () => {
+                            updateState({
+                                connectionMode: ConnectionMode.Host,
+                            });
 
-                        if (!state.offer) {
-                            const offer = await state.connectionController.createOffer();
-                            updateState({offer});
-                        }
+                            if (!state.offer) {
+                                const offer = await state.connectionController.createOffer();
+                                updateState({offer});
+                            }
+                        })}
+                    ></${ViraButton}>
+                    <${ViraButton.assign({
+                        text: 'Join',
+                        buttonStyle:
+                            state.connectionMode === ConnectionMode.Join
+                                ? ViraButtonStyleEnum.Default
+                                : ViraButtonStyleEnum.Outline,
                     })}
-                ></${ViraButton}>
-                <${ViraButton.assign({
-                    text: 'Join',
-                    buttonStyle:
-                        state.connectionMode === ConnectionMode.Join
-                            ? ViraButtonStyleEnum.Default
-                            : ViraButtonStyleEnum.Outline,
-                })}
-                    ${listen('click', () => {
-                        updateState({
-                            connectionMode: ConnectionMode.Join,
-                        });
-                    })}
-                ></${ViraButton}>
-            </section>
-            ${state.connectionMode === ConnectionMode.Host
-                ? hostTemplate
-                : state.connectionMode === ConnectionMode.Join
-                  ? joinTemplate
-                  : nothing}
-            ${state.connectionStatus === PeerConnectionStatus.Connected ? chatTemplate : nothing}
+                        ${listen('click', () => {
+                            updateState({
+                                connectionMode: ConnectionMode.Join,
+                            });
+                        })}
+                    ></${ViraButton}>
+                </section>
+                ${state.connectionMode === ConnectionMode.Host
+                    ? hostTemplate
+                    : state.connectionMode === ConnectionMode.Join
+                      ? joinTemplate
+                      : nothing}
+            </main>
+            <${VirChat.assign({
+                connectionController: state.connectionController,
+            })}></${VirChat}>
         `;
     },
 });
