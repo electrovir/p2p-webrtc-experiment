@@ -6,7 +6,7 @@
         "./packages/*"
     ],
     "scripts": {
-        "build": "virmator frontend build",
+        "build": "cd packages/no-server && npm run build",
         "compile": "mono-vir for-each tsc -b -f --pretty",
         "format": "virmator format",
         "test": "mono-vir for-each-async virmator test",
@@ -32,11 +32,5 @@
         "prettier-plugin-toml": "^2.0.1",
         "typescript": "^5.5.3",
         "virmator": "^12.0.2"
-    },
-    "dependencies": {
-        "@augment-vir/browser": "^29.1.10",
-        "@augment-vir/common": "^29.1.10",
-        "run-time-assertions": "^1.5.1",
-        "typed-event-target": "^3.4.0"
     }
 }
