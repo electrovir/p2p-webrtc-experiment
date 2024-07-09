@@ -1,4 +1,4 @@
-import {createDeferredPromiseWrapper} from '@augment-vir/common';
+import {addPrefix, createDeferredPromiseWrapper} from '@augment-vir/common';
 import {assertDefined, isRunTimeType} from 'run-time-assertions';
 import {defineTypedCustomEvent, ListenTarget} from 'typed-event-target';
 
@@ -24,13 +24,23 @@ export type PeerConnectionEvents =
     | PeerMessageReceivedEvent
     | PeerConnectionStatusEvent;
 
+export function formatStunServerUrls(stunServerUrls: ReadonlyArray<string>) {
+    return stunServerUrls.map((stunServerUrl) => {
+        return {
+            urls: addPrefix({value: stunServerUrl, prefix: 'stun:'}),
+        };
+    });
+}
+
 export class PeerConnectionController extends ListenTarget<PeerConnectionEvents> {
     private offer: undefined | Readonly<RTCSessionDescriptionInit>;
     private answer: undefined | Readonly<RTCSessionDescriptionInit>;
     private dataChannel: undefined | Readonly<RTCDataChannel>;
     private connection: undefined | Readonly<RTCPeerConnection>;
 
-    public async createOffer(): Promise<RTCSessionDescriptionInit> {
+    public async createOffer(
+        stunServerUrls: ReadonlyArray<string>,
+    ): Promise<RTCSessionDescriptionInit> {
         if (this.offer || this.dataChannel || this.connection) {
             throw new Error('offer already created');
         }
@@ -45,7 +55,9 @@ export class PeerConnectionController extends ListenTarget<PeerConnectionEvents>
             }
         };
 
-        this.connection = new RTCPeerConnection();
+        this.connection = new RTCPeerConnection({
+            iceServers: formatStunServerUrls(stunServerUrls),
+        });
         this.connection.addEventListener('icecandidate', iceCandidateListener);
         this.handleDataChannel(this.connection.createDataChannel('chat'));
         await this.connection.setLocalDescription(await this.connection.createOffer());
@@ -70,7 +82,10 @@ export class PeerConnectionController extends ListenTarget<PeerConnectionEvents>
         this.connection.setRemoteDescription(this.answer);
     }
 
-    public async createAnswer(rawOffer: string | Readonly<RTCSessionDescriptionInit>) {
+    public async createAnswer(
+        rawOffer: string | Readonly<RTCSessionDescriptionInit>,
+        stunServerUrls: ReadonlyArray<string>,
+    ) {
         if (this.offer || this.answer || this.dataChannel) {
             throw new Error('offer already accepted');
         }
@@ -79,7 +94,9 @@ export class PeerConnectionController extends ListenTarget<PeerConnectionEvents>
             ? JSON.parse(rawOffer)
             : rawOffer;
 
-        this.connection = new RTCPeerConnection();
+        this.connection = new RTCPeerConnection({
+            iceServers: formatStunServerUrls(stunServerUrls),
+        });
         this.connection.addEventListener('datachannel', (event) => {
             this.handleDataChannel(event.channel);
         });

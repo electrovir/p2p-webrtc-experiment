@@ -2,14 +2,14 @@
     "name": "@evir/no-server",
     "version": "0.0.0",
     "private": true,
+    "type": "module",
     "scripts": {
         "build": "virmator frontend build",
         "compile": "virmator compile",
         "start": "virmator frontend",
-        "test": "virmator test",
+        "test": "virmator test-web",
         "test:all": "npm test",
-        "test:types": "tsc --noEmit",
-        "test:web": "virmator test-web"
+        "test:types": "tsc --noEmit"
     },
     "dependencies": {
         "date-vir": "^5.3.2",

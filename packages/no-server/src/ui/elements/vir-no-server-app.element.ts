@@ -8,9 +8,7 @@ import {
     perInstance,
     renderIf,
 } from 'element-vir';
-import {noNativeSpacing, ViraButton, ViraButtonStyleEnum, ViraInput} from 'vira';
-// import {acceptWebRtcOffer} from '../../webrtc/accept-offer';
-// import {acceptAnswer, createWebRtcOffer} from '../../webrtc/create-offer';
+import {noNativeSpacing, ViraButton, ViraButtonStyleEnum} from 'vira';
 import {
     PeerConnectionController,
     PeerConnectionStatus,
@@ -70,6 +68,10 @@ export const VirNoServerApp = defineElementNoInputs({
             ${noNativeSpacing};
         }
 
+        .stun-input {
+            height: 50px;
+        }
+
         textarea {
             width: 300px;
             max-width: 100%;
@@ -85,6 +87,10 @@ export const VirNoServerApp = defineElementNoInputs({
         messageToSend: '',
         copied: false,
         copiedTimeout: undefined as undefined | number,
+        stunServerUrls: [
+            // 'stun.l.google.com:19302',
+            // 'stun.cloudflare.com:3478',
+        ] as string[],
     },
     initCallback({state, updateState}) {
         state.connectionController.listen(PeerMessageReceivedEvent, (event) => {
@@ -145,6 +151,7 @@ export const VirNoServerApp = defineElementNoInputs({
                         const textAreaElement = extractEventTarget(event, HTMLTextAreaElement);
                         const answer = await state.connectionController.createAnswer(
                             textAreaElement.value,
+                            state.stunServerUrls,
                         );
                         updateState({answer});
                     })}
@@ -183,27 +190,26 @@ export const VirNoServerApp = defineElementNoInputs({
             </section>
         `;
 
-        const chatTemplate = html`
-            <${ViraInput.assign({
-                value: state.messageToSend,
-            })}
-                ${listen(ViraInput.events.valueChange, (event) => {
-                    updateState({messageToSend: event.detail});
-                })}
-            ></${ViraInput}>
-            <${ViraButton.assign({text: 'Send'})}
-                ${listen('click', () => {
-                    if (state.messageToSend) {
-                        state.connectionController.sendMessage(state.messageToSend);
-                        updateState({messageToSend: ''});
-                    }
-                })}
-            ></${ViraButton}>
-        `;
-
         return html`
             <main>
                 <${VirHow}></${VirHow}>
+                <section>
+                    <p>
+                        Enter a comma-separated list of stun servers you'd like to use (if any).
+                        <br />
+                        Without any STUN servers, you can only connect across your LAN.
+                    </p>
+                    <textarea
+                        class="stun-input"
+                        ${listen('input', async (event) => {
+                            const textAreaElement = extractEventTarget(event, HTMLTextAreaElement);
+                            const stunServerUrls = textAreaElement.value
+                                .split(',')
+                                .map((entry) => entry.trim());
+                            updateState({stunServerUrls});
+                        })}
+                    ></textarea>
+                </section>
                 <section class="buttons">
                     <${ViraButton.assign({
                         text: 'Host',
@@ -218,7 +224,9 @@ export const VirNoServerApp = defineElementNoInputs({
                             });
 
                             if (!state.offer) {
-                                const offer = await state.connectionController.createOffer();
+                                const offer = await state.connectionController.createOffer(
+                                    state.stunServerUrls,
+                                );
                                 updateState({offer});
                             }
                         })}
