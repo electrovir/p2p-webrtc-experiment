@@ -41,32 +41,16 @@ export class PeerConnectionController extends ListenTarget<PeerConnectionEvents>
     public async createOffer(
         stunServerUrls: ReadonlyArray<string>,
     ): Promise<RTCSessionDescriptionInit> {
-        if (this.offer || this.dataChannel || this.connection) {
+        if (this.offer || this.dataChannel) {
             throw new Error('offer already created');
         }
 
-        const deferredIceCandidatePromise = createDeferredPromiseWrapper();
-
-        const iceCandidateListener = (event: RTCPeerConnectionIceEvent) => {
-            assertDefined(this.connection);
-            if (!event.candidate) {
-                deferredIceCandidatePromise.resolve();
-                this.connection.removeEventListener('icecandidate', iceCandidateListener);
-            }
-        };
-
-        this.connection = new RTCPeerConnection({
-            iceServers: formatStunServerUrls(stunServerUrls),
-        });
-        this.connection.addEventListener('icecandidate', iceCandidateListener);
+        const candidatePromise = this.createConnection(stunServerUrls);
+        assertDefined(this.connection);
         this.handleDataChannel(this.connection.createDataChannel('chat'));
         await this.connection.setLocalDescription(await this.connection.createOffer());
 
-        /**
-         * We must wait for the ice candidate promise to finish because it mutates
-         * `localDescription`. Without that mutation, the connection will not work.
-         */
-        await deferredIceCandidatePromise.promise;
+        await candidatePromise;
 
         const offer = this.connection.localDescription;
         assertDefined(offer);
@@ -94,16 +78,24 @@ export class PeerConnectionController extends ListenTarget<PeerConnectionEvents>
             ? JSON.parse(rawOffer)
             : rawOffer;
 
-        this.connection = new RTCPeerConnection({
-            iceServers: formatStunServerUrls(stunServerUrls),
-        });
+        const candidatePromise = this.createConnection(stunServerUrls);
+        assertDefined(this.connection);
         this.connection.addEventListener('datachannel', (event) => {
             this.handleDataChannel(event.channel);
         });
 
         await this.connection.setRemoteDescription(offer);
-        const answer = await this.connection.createAnswer();
-        await this.connection.setLocalDescription(answer);
+        await this.connection.setLocalDescription(await this.connection.createAnswer());
+
+        console.log('waiting');
+        if (stunServerUrls.length) {
+            await candidatePromise;
+        }
+        console.log('done waiting');
+
+        const answer = this.connection.localDescription;
+
+        assertDefined(answer);
 
         this.offer = offer;
         this.answer = answer;
@@ -134,5 +126,32 @@ export class PeerConnectionController extends ListenTarget<PeerConnectionEvents>
         this.dataChannel.addEventListener('message', (event) => {
             this.dispatch(new PeerMessageReceivedEvent({detail: event.data}));
         });
+    }
+
+    private createConnection(stunServerUrls: ReadonlyArray<string>) {
+        if (this.connection) {
+            throw new Error('Connection already created!');
+        }
+
+        const deferredIceCandidatePromise = createDeferredPromiseWrapper();
+        const iceCandidateListener = (event: RTCPeerConnectionIceEvent) => {
+            // all candidates are done
+            if (!event.candidate) {
+                assertDefined(this.connection);
+                deferredIceCandidatePromise.resolve();
+                this.connection.removeEventListener('icecandidate', iceCandidateListener);
+            }
+        };
+
+        this.connection = new RTCPeerConnection({
+            iceServers: formatStunServerUrls(stunServerUrls),
+        });
+        this.connection.addEventListener('icecandidate', iceCandidateListener);
+
+        /**
+         * This must be awaited so the candidate list can finish populating before we present the
+         * offer to the user.
+         */
+        return deferredIceCandidatePromise.promise;
     }
 }

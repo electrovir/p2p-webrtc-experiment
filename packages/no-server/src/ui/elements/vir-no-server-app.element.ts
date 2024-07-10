@@ -89,7 +89,8 @@ export const VirNoServerApp = defineElementNoInputs({
         copiedTimeout: undefined as undefined | number,
         stunServerUrls: [
             // 'stun.l.google.com:19302',
-            // 'stun.cloudflare.com:3478',
+            // 'stun.stunprotocol.org',
+            'stun.cloudflare.com:3478',
         ] as string[],
     },
     initCallback({state, updateState}) {
@@ -201,6 +202,7 @@ export const VirNoServerApp = defineElementNoInputs({
                     </p>
                     <textarea
                         class="stun-input"
+                        .value=${state.stunServerUrls.join(', ')}
                         ${listen('input', async (event) => {
                             const textAreaElement = extractEventTarget(event, HTMLTextAreaElement);
                             const stunServerUrls = textAreaElement.value
