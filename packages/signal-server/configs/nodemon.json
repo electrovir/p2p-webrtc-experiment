@@ -1,0 +1,10 @@
+{
+    "exec": "tsx src/server.ts",
+    "ext": "ts",
+    "quiet": true,
+    "signal": "SIGHUP",
+    "watch": [
+        "../common/src",
+        "./src"
+    ]
+}

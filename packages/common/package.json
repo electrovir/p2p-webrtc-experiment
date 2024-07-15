@@ -1,0 +1,17 @@
+{
+    "name": "@evir/common",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "compile": "tsc -b -f --pretty",
+        "test": "echo \"No tests\"",
+        "test:all": "npm test",
+        "test:types": "npm run compile"
+    },
+    "dependencies": {
+        "@augment-vir/common": "^29.3.0",
+        "object-shape-tester": "^2.4.0",
+        "run-time-assertions": "^1.5.1"
+    }
+}

@@ -1,5 +1,5 @@
 {
-    "name": "@evir/no-server",
+    "name": "@evir/use-signal-server",
     "version": "0.0.0",
     "private": true,
     "type": "module",
@@ -12,8 +12,12 @@
         "test:types": "tsc --noEmit"
     },
     "dependencies": {
+        "@augment-vir/common": "^29.3.0",
+        "@evir/common": "*",
         "date-vir": "^5.3.2",
         "element-vir": "^22.2.2",
+        "object-shape-tester": "^2.4.0",
+        "url-vir": "^1.5.0",
         "vira": "^22.2.2"
     },
     "devDependencies": {
