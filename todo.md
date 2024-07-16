@@ -1,2 +1,2 @@
--   support multiple connections in no-server setup
--   can a single offer JSON be reused for multiple clients?
+-   support chat user names and colors
+-   display a message when a user disconnects

@@ -87,11 +87,9 @@ export class PeerConnectionController extends ListenTarget<PeerConnectionEvents>
         await this.connection.setRemoteDescription(offer);
         await this.connection.setLocalDescription(await this.connection.createAnswer());
 
-        console.log('waiting');
         if (stunServerUrls.length) {
             await candidatePromise;
         }
-        console.log('done waiting');
 
         const answer = this.connection.localDescription;
 

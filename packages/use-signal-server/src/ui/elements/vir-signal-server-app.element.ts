@@ -1,17 +1,18 @@
-import {extractEventTarget} from '@augment-vir/browser';
+import {UuidV4, wait} from '@augment-vir/common';
+import {getNowInUserTimezone} from 'date-vir';
+import {css, defineElementNoInputs, html, listen} from 'element-vir';
+import {assertDefined} from 'run-time-assertions';
+import {buildUrl} from 'url-vir';
+import {noNativeSpacing} from 'vira';
 import {
-    css,
-    defineElementNoInputs,
-    html,
-    listen,
-    nothing,
-    perInstance,
-    renderIf,
-} from 'element-vir';
-import {noNativeSpacing, ViraButton, ViraButtonStyleEnum, ViraInput} from 'vira';
-import {MultiPeerConnectionController} from '../../webrtc/multi-peer-connection-controller';
+    MultiPeerConnectionController,
+    PeerMessageEvent,
+} from '../../webrtc/multi-peer-connection-controller';
+import {PeerConnectionEvent} from '../../webrtc/peer-connection-controller';
+import {PeerMessageDataByType, PeerMessageType, isOfMessageType} from '../../webrtc/peer-message';
+import {ChatMessage} from './vir-chat-message.element';
 import {VirChat} from './vir-chat.element';
-import {VirHow} from './vir-how.element';
+import {VirSignalServerConnect} from './vir-signal-server-connect.element';
 
 enum ConnectionMode {
     /** Host a connection. */
@@ -70,175 +71,98 @@ export const VirSignalServerApp = defineElementNoInputs({
         }
     `,
     stateInitStatic: {
-        connectionController: perInstance(() => new MultiPeerConnectionController()),
-        connectionMode: undefined as undefined | ConnectionMode,
-        offer: undefined as undefined | Readonly<RTCSessionDescriptionInit>,
-        answer: undefined as undefined | Readonly<RTCSessionDescriptionInit>,
-        connectionStatus: undefined as undefined | PeerConnectionStatus,
-        messageToSend: '',
-        copied: false,
-        copiedTimeout: undefined as undefined | number,
-    },
-    initCallback({state, updateState}) {
-        state.connectionController.listen(PeerMessageReceivedEvent, (event) => {
-            console.log('message', event.detail);
-        });
-        state.connectionController.listen(PeerConnectionStatusEvent, (event) => {
-            updateState({
-                connectionStatus: event.detail,
-            });
-            console.log('status', event.detail);
-        });
+        signalServerHostname: 'localhost',
+        multiPeerController: undefined as undefined | MultiPeerConnectionController,
+        connected: false,
+        chatHistory: [] as ReadonlyArray<Readonly<ChatMessage>>,
+        userData: {} as Record<UuidV4, PeerMessageDataByType<PeerMessageType.SetUser>>,
     },
     renderCallback({state, updateState}) {
-        const hostTemplate = html`
-            <section class="offer-wrapper host">
-                Copy the following "offer" and send it to a client so they can join you:
-                <div>
-                    <p class="offer">${JSON.stringify(state.offer)}</p>
-                    <button
-                        ${listen('click', async () => {
-                            await window.navigator.clipboard.writeText(JSON.stringify(state.offer));
-                            updateState({copied: true});
-                            if (state.copiedTimeout) {
-                                window.clearTimeout(state.copiedTimeout);
-                            }
-                            updateState({
-                                copiedTimeout: window.setTimeout(() => {
-                                    updateState({
-                                        copied: false,
-                                        copiedTimeout: undefined,
-                                    });
-                                }, 2000),
-                            });
-                        })}
-                    >
-                        ${state.copied ? 'copied' : 'copy'}
-                    </button>
-                </div>
-                <p>
-                    After pasting your offer, the client should provide you with an "answer". Paste
-                    the client's answer below:
-                </p>
-                <textarea
-                    ${listen('input', async (event) => {
-                        const textAreaElement = extractEventTarget(event, HTMLTextAreaElement);
-                        await state.connectionController.acceptAnswer(textAreaElement.value);
-                    })}
-                ></textarea>
-            </section>
-        `;
+        const connectionTemplate = html`
+            <${VirSignalServerConnect.assign({
+                signalServerHostname: state.signalServerHostname,
+            })}
+                ${listen(VirSignalServerConnect.events.signalServerHostnameChange, (event) => {
+                    updateState({
+                        signalServerHostname: event.detail,
+                    });
+                })}
+                ${listen(VirSignalServerConnect.events.activePortFound, async (event) => {
+                    const signalServerUrl = buildUrl({
+                        protocol: 'ws',
+                        hostname: state.signalServerHostname,
+                        port: event.detail,
+                    });
+                    const multiPeerController = new MultiPeerConnectionController(
+                        signalServerUrl.href,
+                        [
+                            /**
+                             * Not providing any STUN servers because the signal server is only
+                             * works on localhost anyway.
+                             */
+                        ],
+                    );
 
-        const joinTemplate = html`
-            <section class="offer-wrapper join">
-                Paste the host's offer:
-                <br />
-                <textarea
-                    ${listen('input', async (event) => {
-                        const textAreaElement = extractEventTarget(event, HTMLTextAreaElement);
-                        const answer = await state.connectionController.createAnswer(
-                            textAreaElement.value,
-                        );
-                        updateState({answer});
-                    })}
-                ></textarea>
-                ${renderIf(
-                    !!state.answer,
-                    html`
-                        <br />
-                        Copy the following "answer" and send it to the host:
-                        <div>
-                            <p class="offer">${JSON.stringify(state.answer)}</p>
-                            <button
-                                ${listen('click', async () => {
-                                    await window.navigator.clipboard.writeText(
-                                        JSON.stringify(state.answer),
-                                    );
-                                    updateState({copied: true});
-                                    if (state.copiedTimeout) {
-                                        window.clearTimeout(state.copiedTimeout);
-                                    }
-                                    updateState({
-                                        copiedTimeout: window.setTimeout(() => {
-                                            updateState({
-                                                copied: false,
-                                                copiedTimeout: undefined,
-                                            });
-                                        }, 2000),
-                                    });
-                                })}
-                            >
-                                ${state.copied ? 'copied' : 'copy'}
-                            </button>
-                        </div>
-                    `,
-                )}
-            </section>
+                    multiPeerController.listen(PeerConnectionEvent, (event) => {
+                        updateState({connected: event.detail});
+                    });
+                    multiPeerController.listen(PeerMessageEvent, (event) => {
+                        const message = event.detail;
+                        if (isOfMessageType(message, PeerMessageType.Chat)) {
+                            const newChatMessage: Readonly<ChatMessage> = {
+                                clientUuid: message.clientUuid,
+                                direction: message.direction,
+                                text: message.data.chat,
+                                time: getNowInUserTimezone(),
+                            };
+
+                            updateState({
+                                chatHistory: [
+                                    ...state.chatHistory,
+                                    newChatMessage,
+                                ],
+                            });
+                        } else if (isOfMessageType(message, PeerMessageType.SetUser)) {
+                            updateState({
+                                userData: {
+                                    ...state.userData,
+                                    [message.clientUuid]: message.data,
+                                },
+                            });
+                        } else {
+                            console.error(message);
+                            console.error(`Unexpected message type: ${message.data.type}`);
+                        }
+                    });
+
+                    updateState({
+                        multiPeerController,
+                    });
+                    await wait(300);
+
+                    await multiPeerController.initConnection();
+                })}
+            ></${VirSignalServerConnect}>
         `;
 
         const chatTemplate = html`
-            <${ViraInput.assign({
-                value: state.messageToSend,
+            <${VirChat.assign({
+                messages: state.chatHistory,
+                connected: state.connected,
             })}
-                ${listen(ViraInput.events.valueChange, (event) => {
-                    updateState({messageToSend: event.detail});
+                ${listen(VirChat.events.messageSend, (event) => {
+                    assertDefined(state.multiPeerController);
+
+                    state.multiPeerController.sendMessage({
+                        type: PeerMessageType.Chat,
+                        chat: event.detail,
+                    });
                 })}
-            ></${ViraInput}>
-            <${ViraButton.assign({text: 'Send'})}
-                ${listen('click', () => {
-                    if (state.messageToSend) {
-                        state.connectionController.sendMessage(state.messageToSend);
-                        updateState({messageToSend: ''});
-                    }
-                })}
-            ></${ViraButton}>
+            ></${VirChat}>
         `;
 
         return html`
-            <main>
-                <${VirHow}></${VirHow}>
-                <section class="buttons">
-                    <${ViraButton.assign({
-                        text: 'Host',
-                        buttonStyle:
-                            state.connectionMode === ConnectionMode.Host
-                                ? ViraButtonStyleEnum.Default
-                                : ViraButtonStyleEnum.Outline,
-                    })}
-                        ${listen('click', async () => {
-                            updateState({
-                                connectionMode: ConnectionMode.Host,
-                            });
-
-                            if (!state.offer) {
-                                const offer = await state.connectionController.createOffer();
-                                updateState({offer});
-                            }
-                        })}
-                    ></${ViraButton}>
-                    <${ViraButton.assign({
-                        text: 'Join',
-                        buttonStyle:
-                            state.connectionMode === ConnectionMode.Join
-                                ? ViraButtonStyleEnum.Default
-                                : ViraButtonStyleEnum.Outline,
-                    })}
-                        ${listen('click', () => {
-                            updateState({
-                                connectionMode: ConnectionMode.Join,
-                            });
-                        })}
-                    ></${ViraButton}>
-                </section>
-                ${state.connectionMode === ConnectionMode.Host
-                    ? hostTemplate
-                    : state.connectionMode === ConnectionMode.Join
-                      ? joinTemplate
-                      : nothing}
-            </main>
-            <${VirChat.assign({
-                connectionController: state.connectionController,
-            })}></${VirChat}>
+            ${state.multiPeerController ? chatTemplate : connectionTemplate}
         `;
     },
 });

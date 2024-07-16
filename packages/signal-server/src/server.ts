@@ -13,6 +13,7 @@ import {
     startingPort,
 } from '@evir/common/src/signal-server';
 import {addExitCallback} from 'catch-exit';
+import cors from 'cors';
 import {getNowInUserTimezone, toSimpleString} from 'date-vir';
 import {Server, Websocket} from 'hyper-express';
 import {getPortPromise} from 'portfinder';
@@ -35,6 +36,9 @@ async function startServers() {
         log.faint('closing server');
         server.close();
     });
+
+    /** All connections from any origin. */
+    server.use(cors());
 
     /** A simple health check server that simply returns a dummy response for all http requests. */
     server.get('*', (request, response) => {

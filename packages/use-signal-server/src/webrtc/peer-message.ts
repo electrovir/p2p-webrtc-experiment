@@ -1,4 +1,4 @@
-import {UuidV4} from '@augment-vir/common';
+import {Overwrite, UuidV4} from '@augment-vir/common';
 import {assertValidShape, defineShape, exact, or} from 'object-shape-tester';
 
 export enum PeerMessageType {
@@ -23,12 +23,27 @@ const peerMessageDataShape = defineShape(
 );
 
 export type PeerMessageData = typeof peerMessageDataShape.runTimeType;
+export type PeerMessageDataByType<MessageType extends PeerMessageType> = Extract<
+    typeof peerMessageDataShape.runTimeType,
+    {type: MessageType}
+>;
 
 export type PeerMessage = {
     clientUuid: UuidV4;
     direction: PeerMessageDirection;
     data: PeerMessageData;
 };
+export type PeerMessageByType<MessageType extends PeerMessageType> = Overwrite<
+    PeerMessage,
+    {data: PeerMessageDataByType<MessageType>}
+>;
+
+export function isOfMessageType<const MessageType extends PeerMessageType>(
+    message: PeerMessage,
+    messageType: MessageType,
+): message is PeerMessageByType<MessageType> {
+    return message.data.type === messageType;
+}
 
 export enum PeerMessageDirection {
     Sent = 'sent',

@@ -13,7 +13,6 @@ import {
     PeerConnectionController,
     PeerConnectionStatus,
     PeerConnectionStatusEvent,
-    PeerMessageReceivedEvent,
 } from '../../webrtc/peer-connection-controller';
 import {VirChat} from './vir-chat.element';
 import {VirHow} from './vir-how.element';
@@ -94,14 +93,10 @@ export const VirNoServerApp = defineElementNoInputs({
         ] as string[],
     },
     initCallback({state, updateState}) {
-        state.connectionController.listen(PeerMessageReceivedEvent, (event) => {
-            console.log('message', event.detail);
-        });
         state.connectionController.listen(PeerConnectionStatusEvent, (event) => {
             updateState({
                 connectionStatus: event.detail,
             });
-            console.log('status', event.detail);
         });
     },
     renderCallback({state, updateState}) {

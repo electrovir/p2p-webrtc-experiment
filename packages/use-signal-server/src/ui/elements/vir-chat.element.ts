@@ -1,20 +1,16 @@
-import {getNowInUserTimezone} from 'date-vir';
-import {css, defineElement, html, listen, unsafeCSS} from 'element-vir';
+import {css, defineElement, defineElementEvent, html, listen} from 'element-vir';
 import {ViraButton, ViraInput} from 'vira';
-import {
-    MultiPeerConnectionController,
-    PeerConnectionStatus,
-    PeerConnectionStatusEvent,
-    PeerMessageReceivedEvent,
-    PeerMessageSentEvent,
-} from '../../webrtc/multi-peer-connection-controller';
-import {ChatDirection, ChatMessage, VirChatMessage} from './vir-chat-message.element';
+import {ChatMessage, VirChatMessage} from './vir-chat-message.element';
 
 export const VirChat = defineElement<{
-    connectionController: Readonly<MultiPeerConnectionController>;
+    messages: ReadonlyArray<Readonly<ChatMessage>>;
+    connected: boolean;
 }>()({
     tagName: 'vir-chat',
-    styles: css`
+    hostClasses: {
+        'vir-chat-connected': ({inputs}) => inputs.connected,
+    },
+    styles: ({hostClasses}) => css`
         :host {
             display: flex;
             flex-direction: column;
@@ -52,19 +48,11 @@ export const VirChat = defineElement<{
             border-radius: 50%;
             width: 6px;
             height: 6px;
-            background-color: #ccc;
-        }
-
-        .connection-status-indicator.${unsafeCSS(PeerConnectionStatus.Closed)} {
-            background-color: red;
-        }
-        .connection-status-indicator.${unsafeCSS(PeerConnectionStatus.Closing)},
-            .connection-status-indicator.${unsafeCSS(PeerConnectionStatus.Connecting)} {
             background-color: orange;
         }
-        .connection-status-indicator.${unsafeCSS(PeerConnectionStatus.Closing)},
-            .connection-status-indicator.${unsafeCSS(PeerConnectionStatus.Connected)} {
-            background-color: lightseagreen;
+
+        ${hostClasses['vir-chat-connected'].selector} .connection-status-indicator {
+            background-color: green;
         }
 
         ${ViraInput} {
@@ -75,57 +63,14 @@ export const VirChat = defineElement<{
             align-self: flex-end;
         }
     `,
+    events: {
+        messageSend: defineElementEvent<string>(),
+    },
     stateInitStatic: {
-        cleanup: undefined as undefined | (() => void),
-        connectionStatus: undefined as undefined | PeerConnectionStatus,
-        chatHistory: [] as ChatMessage[],
         currentMessage: '',
     },
-    initCallback({inputs, state, updateState}) {
-        if (!state.cleanup) {
-            const unListens = [
-                inputs.connectionController.listen(PeerConnectionStatusEvent, (event) => {
-                    updateState({connectionStatus: event.detail});
-                }),
-                inputs.connectionController.listen(PeerMessageReceivedEvent, (event) => {
-                    updateState({
-                        chatHistory: [
-                            ...state.chatHistory,
-                            {
-                                direction: ChatDirection.Received,
-                                time: getNowInUserTimezone(),
-                                text: event.detail,
-                            },
-                        ],
-                    });
-                }),
-                inputs.connectionController.listen(PeerMessageSentEvent, (event) => {
-                    updateState({
-                        chatHistory: [
-                            ...state.chatHistory,
-                            {
-                                direction: ChatDirection.Sent,
-                                time: getNowInUserTimezone(),
-                                text: event.detail,
-                            },
-                        ],
-                    });
-                }),
-            ];
-
-            updateState({
-                cleanup() {
-                    unListens.forEach((unListen) => unListen());
-                },
-            });
-        }
-    },
-    cleanupCallback({state, updateState}) {
-        state.cleanup?.();
-        updateState({cleanup: undefined});
-    },
-    renderCallback({inputs, state, updateState}) {
-        const messageTemplates = state.chatHistory.map(
+    renderCallback({inputs, state, updateState, dispatch, events}) {
+        const messageTemplates = inputs.messages.map(
             (message) => html`
                 <${VirChatMessage.assign({message})}></${VirChatMessage}>
             `,
@@ -134,21 +79,23 @@ export const VirChat = defineElement<{
         function sendMessage() {
             const message = state.currentMessage;
             updateState({currentMessage: ''});
-            inputs.connectionController.sendMessage(message);
+            dispatch(new events.messageSend(message));
         }
+
+        const connectionMessage = inputs.connected ? 'Connected' : 'Waiting for peers...';
 
         return html`
             <header>
                 Chat
                 <div class="connection-status">
-                    <div class="connection-status-indicator ${state.connectionStatus}"></div>
-                    ${state.connectionStatus?.toLowerCase() || 'no connection'}
+                    <div class="connection-status-indicator"></div>
+                    ${connectionMessage}
                 </div>
             </header>
             <div class="chat-history">${messageTemplates}</div>
             <${ViraInput.assign({
                 value: state.currentMessage,
-                disabled: state.connectionStatus !== PeerConnectionStatus.Connected,
+                disabled: !inputs.connected,
             })}
                 ${listen(ViraInput.events.valueChange, (event) => {
                     updateState({currentMessage: event.detail});
@@ -167,7 +114,7 @@ export const VirChat = defineElement<{
             ></${ViraInput}>
             <${ViraButton.assign({
                 text: 'send',
-                disabled: state.connectionStatus !== PeerConnectionStatus.Connected,
+                disabled: !inputs.connected,
             })}
                 ${listen('click', sendMessage)}
             ></${ViraButton}>

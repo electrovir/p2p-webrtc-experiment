@@ -15,6 +15,7 @@
         "@augment-vir/node-js": "^29.3.0",
         "@evir/common": "*",
         "catch-exit": "^1.2.2",
+        "cors": "^2.8.5",
         "date-vir": "^5.3.2",
         "hyper-express": "^6.16.4",
         "portfinder": "^1.0.32",
@@ -22,6 +23,7 @@
         "tsx": "^4.16.2"
     },
     "devDependencies": {
+        "@types/cors": "^2.8.17",
         "nodemon": "^3.1.4"
     }
 }

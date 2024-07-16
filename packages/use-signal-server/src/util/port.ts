@@ -1,3 +1,4 @@
+import {wait} from '@augment-vir/common';
 import {buildUrl} from 'url-vir';
 
 export async function findActivePort(
@@ -14,14 +15,17 @@ export async function findActivePort(
     },
     isValidCallback: (response: Response) => boolean = () => true,
 ): Promise<number> {
+    await wait(200);
     let port: number = startingPort;
 
     while (port < startingPort + maxPortScanDistance) {
         const url = buildUrl({
+            protocol: 'http',
             hostname,
             pathname: path,
             port,
         });
+        await wait(100);
 
         try {
             const response = await fetch(url.href);
@@ -30,7 +34,7 @@ export async function findActivePort(
                 return port;
             }
         } finally {
-            continue;
+            port++;
         }
     }
 

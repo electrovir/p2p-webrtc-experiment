@@ -2,7 +2,7 @@ import {AnyObject, Overwrite, UuidV4, isUuid} from '@augment-vir/common';
 import {defineShape, exact, isValidShape, or} from 'object-shape-tester';
 import {isRunTimeType} from 'run-time-assertions';
 
-export const startingPort = 5162;
+export const startingPort = 5151;
 export const maxPortScanDistance = 20;
 
 /** Sent in the data header of the signal server's http response. */

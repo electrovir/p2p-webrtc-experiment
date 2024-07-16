@@ -77,7 +77,6 @@ export class PeerConnectionController extends ListenTarget<PeerConnectionEvents>
     public sendMessage(data: Readonly<PeerMessageData>) {
         assertDefined(this.dataChannel);
         this.dataChannel.send(JSON.stringify(data));
-        this.dispatch(new PeerMessageDataEvent({detail: data}));
     }
 
     private handleDataChannel(dataChannel: Readonly<RTCDataChannel>) {

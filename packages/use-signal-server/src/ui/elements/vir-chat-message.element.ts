@@ -1,3 +1,4 @@
+import {UuidV4} from '@augment-vir/common';
 import {
     formatPresets,
     FullDate,
@@ -7,14 +8,11 @@ import {
 } from 'date-vir';
 import {css, defineElement, html} from 'element-vir';
 import {noNativeSpacing} from 'vira';
-
-export enum ChatDirection {
-    Sent = 'sent',
-    Received = 'received',
-}
+import {PeerMessageDirection} from '../../webrtc/peer-message';
 
 export type ChatMessage = Readonly<{
-    direction: ChatDirection;
+    clientUuid: UuidV4;
+    direction: PeerMessageDirection;
     text: string;
     time: Readonly<FullDate>;
 }>;
@@ -22,7 +20,8 @@ export type ChatMessage = Readonly<{
 export const VirChatMessage = defineElement<{message: Readonly<ChatMessage>}>()({
     tagName: 'vir-chat-message',
     hostClasses: {
-        'vir-chat-message-self': ({inputs}) => inputs.message.direction === ChatDirection.Sent,
+        'vir-chat-message-self': ({inputs}) =>
+            inputs.message.direction === PeerMessageDirection.Sent,
     },
     styles: ({hostClasses}) => css`
         :host {
