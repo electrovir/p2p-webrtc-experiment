@@ -1,2 +1,0 @@
--   support chat user names and colors
--   display a message when a user disconnects
